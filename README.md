@@ -1,4 +1,4 @@
-# radic/composer-merge-plugin
+# laradic/composer-merge-plugin
 This is a fork of `wikimedia/composer-merge-plugin`. It adds all merged composer files their library name to the root composer its
 `replace` configuration during install/update. This way if you have the library in both your root composer's `require` but also
 have it locally merged with merge plugin, the `require` dependency is ignored and as such the library wont be installed to the vendor.  
