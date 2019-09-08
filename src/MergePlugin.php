@@ -233,8 +233,8 @@ class MergePlugin implements PluginInterface, EventSubscriberInterface
 
     protected function addReplaces(array $patterns)
     {
-        $paths = array_map('glob', $patterns);
-        foreach ($paths as $path) {
+        $files = array_map('glob', $patterns);
+        foreach (array_reduce($files, 'array_merge', []) as $path) {
             $package = new ExtraPackage($path, $this->composer, $this->logger);
             $this->addRootReplace($package->getPackage()->getName(), '*');
         }
