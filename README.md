@@ -3,7 +3,8 @@ This is a fork of `wikimedia/composer-merge-plugin`. It adds all merged composer
 `replace` configuration during install/update. This way if you have the library in both your root composer's `require` but also
 have it locally merged with merge plugin, the `require` dependency is ignored and as such the library wont be installed to the vendor.  
 
-** The changed code: **
+### Changes
+##### 1.0.0
 ```php
 // MergePlugin.php
 protected function addPackageToRootReplaces(ExtraPackage $package)
@@ -17,6 +18,23 @@ $root->setReplaces($rootReplaces);
 $this->logger->info("Added package <comment>{$package->getPackage()->getName()}</comment> to root composer replace");
 }
 ```
+
+##### 1.1.0
+In order to customize the `replaces` you should now:
+```json
+{
+    "extra": {
+        "merge-plugin": {
+            "include": ["addons/*/*/*/composer.json", "core/*/*/composer.json", "packages/*/*/composer.json"],
+            "replaces": ["addons/*/*/*/composer.json", "packages/*/*/composer.json"],
+            "recurse": true,
+            "replace": false,
+            "merge-dev": true
+        }
+    }
+}
+```
+
 
 Composer Merge Plugin
 =====================

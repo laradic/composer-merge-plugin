@@ -1,9 +1,7 @@
 <?php
 /**
  * This file is part of the Composer Merge plugin.
- *
  * Copyright (C) 2015 Bryan Davis, Wikimedia Foundation, and contributors
- *
  * This software may be modified and distributed under the terms of the MIT
  * license. See the LICENSE file for details.
  */
@@ -27,17 +25,17 @@ class PluginState
     /**
      * @var array $includes
      */
-    protected $includes = array();
+    protected $includes = [];
 
     /**
      * @var array $requires
      */
-    protected $requires = array();
+    protected $requires = [];
 
     /**
      * @var array $duplicateLinks
      */
-    protected $duplicateLinks = array();
+    protected $duplicateLinks = [];
 
     /**
      * @var bool $devMode
@@ -61,13 +59,13 @@ class PluginState
 
     /**
      * Whether to merge the -dev sections.
+     *
      * @var bool $mergeDev
      */
     protected $mergeDev = true;
 
     /**
      * Whether to merge the extra section.
-     *
      * By default, the extra section is not merged and there will be many
      * cases where the merge of the extra section is performed too late
      * to be of use to other plugins. When enabled, merging uses one of
@@ -81,16 +79,13 @@ class PluginState
 
     /**
      * Whether to merge the extra section in a deep / recursive way.
-     *
      * By default the extra section is merged with array_merge() and duplicate
      * keys are ignored. When enabled this allows to merge the arrays recursively
      * using the following rule: Integer keys are merged, while array values are
      * replaced where the later values overwrite the former.
-     *
      * This is useful especially for the extra section when plugins use larger
      * structures like a 'patches' key with the packages as sub-keys and the
      * patches as values.
-     *
      * When 'replace' mode is activated the order of array merges is exchanged.
      *
      * @var bool $mergeExtraDeep
@@ -124,6 +119,9 @@ class PluginState
      */
     protected $optimizeAutoloader = false;
 
+    /** @var array */
+    protected $replaces = [];
+
     /**
      * @param Composer $composer
      */
@@ -137,33 +135,36 @@ class PluginState
      */
     public function loadSettings()
     {
-        $extra = $this->composer->getPackage()->getExtra();
+        $extra  = $this->composer->getPackage()->getExtra();
         $config = array_merge(
-            array(
-                'include' => array(),
-                'require' => array(),
-                'recurse' => true,
-                'replace' => false,
+            [
+                'include'           => [],
+                'require'           => [],
+                'replaces'          => [],
+                'recurse'           => true,
+                'replace'           => false,
                 'ignore-duplicates' => false,
-                'merge-dev' => true,
-                'merge-extra' => false,
-                'merge-extra-deep' => false,
-                'merge-scripts' => false,
-            ),
-            isset($extra['merge-plugin']) ? $extra['merge-plugin'] : array()
+                'merge-dev'         => true,
+                'merge-extra'       => false,
+                'merge-extra-deep'  => false,
+                'merge-scripts'     => false,
+            ],
+            isset($extra[ 'merge-plugin' ]) ? $extra[ 'merge-plugin' ] : []
         );
 
-        $this->includes = (is_array($config['include'])) ?
-            $config['include'] : array($config['include']);
-        $this->requires = (is_array($config['require'])) ?
-            $config['require'] : array($config['require']);
-        $this->recurse = (bool)$config['recurse'];
-        $this->replace = (bool)$config['replace'];
-        $this->ignore = (bool)$config['ignore-duplicates'];
-        $this->mergeDev = (bool)$config['merge-dev'];
-        $this->mergeExtra = (bool)$config['merge-extra'];
-        $this->mergeExtraDeep = (bool)$config['merge-extra-deep'];
-        $this->mergeScripts = (bool)$config['merge-scripts'];
+        $this->includes       = (is_array($config[ 'include' ])) ?
+            $config[ 'include' ] : [ $config[ 'include' ] ];
+        $this->requires       = (is_array($config[ 'require' ])) ?
+            $config[ 'require' ] : [ $config[ 'require' ] ];
+        $this->replaces       = (is_array($config[ 'replaces' ])) ?
+            $config[ 'replaces' ] : [ $config[ 'replaces' ] ];
+        $this->recurse        = (bool)$config[ 'recurse' ];
+        $this->replace        = (bool)$config[ 'replace' ];
+        $this->ignore         = (bool)$config[ 'ignore-duplicates' ];
+        $this->mergeDev       = (bool)$config[ 'merge-dev' ];
+        $this->mergeExtra     = (bool)$config[ 'merge-extra' ];
+        $this->mergeExtraDeep = (bool)$config[ 'merge-extra-deep' ];
+        $this->mergeScripts   = (bool)$config[ 'merge-scripts' ];
     }
 
     /**
@@ -184,6 +185,16 @@ class PluginState
     public function getRequires()
     {
         return $this->requires;
+    }
+
+    public function getReplaces()
+    {
+        return $this->replaces;
+    }
+
+    public function hasReplaces()
+    {
+        return ! empty($this->replaces);
     }
 
     /**
@@ -233,7 +244,7 @@ class PluginState
      */
     public function forceUpdate()
     {
-        return !$this->locked;
+        return ! $this->locked;
     }
 
     /**
@@ -310,15 +321,15 @@ class PluginState
      * Add duplicate packages
      *
      * @param string $type Package type
-     * @param array $packages
+     * @param array  $packages
      */
     public function addDuplicateLinks($type, array $packages)
     {
-        if (!isset($this->duplicateLinks[$type])) {
-            $this->duplicateLinks[$type] = array();
+        if ( ! isset($this->duplicateLinks[ $type ])) {
+            $this->duplicateLinks[ $type ] = [];
         }
-        $this->duplicateLinks[$type] =
-            array_merge($this->duplicateLinks[$type], $packages);
+        $this->duplicateLinks[ $type ] =
+            array_merge($this->duplicateLinks[ $type ], $packages);
     }
 
     /**
@@ -329,8 +340,8 @@ class PluginState
      */
     public function getDuplicateLinks($type)
     {
-        return isset($this->duplicateLinks[$type]) ?
-            $this->duplicateLinks[$type] : array();
+        return isset($this->duplicateLinks[ $type ]) ?
+            $this->duplicateLinks[ $type ] : [];
     }
 
     /**
@@ -365,7 +376,6 @@ class PluginState
 
     /**
      * Should the extra section be merged?
-     *
      * By default, the extra section is not merged and there will be many
      * cases where the merge of the extra section is performed too late
      * to be of use to other plugins. When enabled, merging uses one of
@@ -382,16 +392,13 @@ class PluginState
 
     /**
      * Should the extra section be merged deep / recursively?
-     *
      * By default the extra section is merged with array_merge() and duplicate
      * keys are ignored. When enabled this allows to merge the arrays recursively
      * using the following rule: Integer keys are merged, while array values are
      * replaced where the later values overwrite the former.
-     *
      * This is useful especially for the extra section when plugins use larger
      * structures like a 'patches' key with the packages as sub-keys and the
      * patches as values.
-     *
      * When 'replace' mode is activated the order of array merges is exchanged.
      *
      * @return bool
@@ -404,7 +411,6 @@ class PluginState
 
     /**
      * Should the scripts section be merged?
-     *
      * By default, the scripts section is not merged.
      *
      * @return bool
