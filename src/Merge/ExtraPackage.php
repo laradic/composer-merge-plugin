@@ -311,10 +311,21 @@ class ExtraPackage
             return;
         }
 
+        if(isset($autoload['exclude-from-classmap'])){
+            $excludeFromClassmap = $autoload['exclude-from-classmap'];
+        }
+        $autoload = $this->fixRelativePaths($autoload);
+
+        if(isset($autoload['exclude-from-classmap'])){
+            $autoload['exclude-from-classmap'] = $excludeFromClassmap;
+        }
+
+
+
         $unwrapped = self::unwrapIfNeeded($root, $setter);
         $unwrapped->{$setter}(array_merge_recursive(
             $root->{$getter}(),
-            $this->fixRelativePaths($autoload)
+            $autoload
         ));
     }
 
