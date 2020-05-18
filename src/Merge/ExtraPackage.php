@@ -70,6 +70,7 @@ class ExtraPackage
         $this->path          = $path;
         $this->composer      = $composer;
         $this->logger        = $logger;
+        $logger->info("Loading $path");
         $this->json          = $this->readPackageJson($path);
         $this->package       = $this->loadPackage($this->json);
         $this->versionParser = new VersionParser();
