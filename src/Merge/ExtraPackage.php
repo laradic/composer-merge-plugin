@@ -13,6 +13,7 @@ use Composer\Package\Link;
 use Composer\Json\JsonFile;
 use UnexpectedValueException;
 use Wikimedia\Composer\Logger;
+use Composer\Semver\Intervals;
 use Composer\Package\BasePackage;
 use Composer\Package\RootPackage;
 use Composer\Package\CompletePackage;
@@ -70,15 +71,9 @@ class ExtraPackage
         $this->path          = $path;
         $this->composer      = $composer;
         $this->logger        = $logger;
-        $logger->info("Loading $path");
         $this->json          = $this->readPackageJson($path);
         $this->package       = $this->loadPackage($this->json);
         $this->versionParser = new VersionParser();
-    }
-
-    public function getPackage()
-    {
-        return $this->package;
     }
 
     /**
@@ -231,7 +226,11 @@ class ExtraPackage
      * @param RootPackageInterface $root
      * @param PluginState          $state
      */
-    protected function mergeRequires($type, RootPackageInterface $root, PluginState $state)
+    protected function mergeRequires(
+        $type,
+        RootPackageInterface $root,
+        PluginState $state
+    )
     {
         $linkType = BasePackage::$supportedLinkTypes[ $type ];
         $getter   = 'get' . ucfirst($linkType[ 'method' ]);
@@ -268,32 +267,88 @@ class ExtraPackage
      * @param PluginState $state
      * @return array Merged collection
      */
-    protected function mergeOrDefer($type, array $origin, array $merge, $state)
+    protected function mergeOrDefer(
+        $type,
+        array $origin,
+        array $merge,
+        PluginState $state
+    )
     {
         if ($state->ignoreDuplicateLinks() && $state->replaceDuplicateLinks()) {
             $this->logger->warning("Both replace and ignore-duplicates are true. These are mutually exclusive.");
             $this->logger->warning("Duplicate packages will be ignored.");
         }
 
-        $dups = [];
         foreach ($merge as $name => $link) {
-            if (isset($origin[ $name ]) && $state->ignoreDuplicateLinks()) {
-                $this->logger->info("Ignoring duplicate <comment>{$name}</comment>");
-                continue;
-            }
-            if ( ! isset($origin[ $name ]) || $state->replaceDuplicateLinks()) {
-                $this->logger->info("Merging <comment>{$name}</comment>");
-                $origin[ $name ] = $link;
+            if (isset($origin[ $name ])) {
+                if ($state->ignoreDuplicateLinks()) {
+                    $this->logger->info("Ignoring duplicate <comment>{$name}</comment>");
+                    continue;
+                }
+
+                if ($state->replaceDuplicateLinks()) {
+                    $this->logger->info("Replacing <comment>{$name}</comment>");
+                    $origin[ $name ] = $link;
+                } else {
+                    $this->logger->info("Merging <comment>{$name}</comment>");
+                    $origin[ $name ] = $this->mergeConstraints($origin[ $name ], $link, $state);
+                }
             } else {
-                // Defer to solver.
-                $this->logger->info(
-                    "Deferring duplicate <comment>{$name}</comment>"
-                );
-                $dups[] = $link;
+                $this->logger->info("Adding <comment>{$name}</comment>");
+                $origin[ $name ] = $link;
             }
         }
-        $state->addDuplicateLinks($type, $dups);
+
+        if ( ! $state->isComposer1()) {
+            Intervals::clear();
+        }
+
         return $origin;
+    }
+
+    /**
+     * Merge package constraints.
+     * Adapted from Composer's UpdateCommand::appendConstraintToLink
+     *
+     * @param Link        $origin The base package link.
+     * @param Link        $merge  The related package link to merge.
+     * @param PluginState $state
+     * @return Link Merged link.
+     */
+    protected function mergeConstraints(Link $origin, Link $merge, PluginState $state)
+    {
+        $parser = $this->versionParser;
+
+        $oldPrettyString = $origin->getConstraint()->getPrettyString();
+        $newPrettyString = $merge->getConstraint()->getPrettyString();
+
+        if ($state->isComposer1()) {
+            $constraintClass = 'Wikimedia\\Composer\\Merge\\MultiConstraint';
+        } else {
+            $constraintClass = 'Composer\\Semver\\Constraint\\MultiConstraint';
+
+            if (Intervals::isSubsetOf($origin->getConstraint(), $merge->getConstraint())) {
+                return $origin;
+            }
+
+            if (Intervals::isSubsetOf($merge->getConstraint(), $origin->getConstraint())) {
+                return $merge;
+            }
+        }
+
+        $newConstraint = $constraintClass::create([
+            $origin->getConstraint(),
+            $merge->getConstraint(),
+        ], true);
+        $newConstraint->setPrettyString($oldPrettyString . ', ' . $newPrettyString);
+
+        return new Link(
+            $origin->getSource(),
+            $origin->getTarget(),
+            $newConstraint,
+            $origin->getDescription(),
+            $origin->getPrettyConstraint() . ', ' . $newPrettyString
+        );
     }
 
     /**
@@ -312,21 +367,10 @@ class ExtraPackage
             return;
         }
 
-        if(isset($autoload['exclude-from-classmap'])){
-            $excludeFromClassmap = $autoload['exclude-from-classmap'];
-        }
-        $autoload = $this->fixRelativePaths($autoload);
-
-        if(isset($autoload['exclude-from-classmap'])){
-            $autoload['exclude-from-classmap'] = $excludeFromClassmap;
-        }
-
-
-
         $unwrapped = self::unwrapIfNeeded($root, $setter);
         $unwrapped->{$setter}(array_merge_recursive(
             $root->{$getter}(),
-            $autoload
+            $this->fixRelativePaths($autoload)
         ));
     }
 
@@ -623,8 +667,7 @@ class ExtraPackage
         foreach ($requires as $reqName => $reqVersion) {
             $reqVersion    = preg_replace('{^([^,\s@]+) as .+$}', '$1', $reqVersion);
             $stabilityName = VersionParser::parseStability($reqVersion);
-            if (
-                preg_match('{^[^,\s@]+?#([a-f0-9]+)$}', $reqVersion, $match) &&
+            if (preg_match('{^[^,\s@]+?#([a-f0-9]+)$}', $reqVersion, $match) &&
                 $stabilityName === 'dev'
             ) {
                 $name                = strtolower($reqName);

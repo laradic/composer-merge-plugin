@@ -9,6 +9,7 @@
 namespace Wikimedia\Composer\Merge;
 
 use Composer\Composer;
+use Composer\Plugin\PluginInterface;
 
 /**
  * Mutable plugin state
@@ -23,6 +24,11 @@ class PluginState
     protected $composer;
 
     /**
+     * @var bool $isComposer1
+     */
+    protected $isComposer1;
+
+    /**
      * @var array $includes
      */
     protected $includes = [];
@@ -31,11 +37,6 @@ class PluginState
      * @var array $requires
      */
     protected $requires = [];
-
-    /**
-     * @var array $duplicateLinks
-     */
-    protected $duplicateLinks = [];
 
     /**
      * @var bool $devMode
@@ -119,15 +120,23 @@ class PluginState
      */
     protected $optimizeAutoloader = false;
 
-    /** @var array */
-    protected $replaces = [];
-
     /**
      * @param Composer $composer
      */
     public function __construct(Composer $composer)
     {
-        $this->composer = $composer;
+        $this->composer    = $composer;
+        $this->isComposer1 = version_compare(PluginInterface::PLUGIN_API_VERSION, '2.0.0', '<');
+    }
+
+    /**
+     * Test if this plugin runs within Composer 1.
+     *
+     * @return bool
+     */
+    public function isComposer1()
+    {
+        return $this->isComposer1;
     }
 
     /**
@@ -140,7 +149,6 @@ class PluginState
             [
                 'include'           => [],
                 'require'           => [],
-                'replaces'          => [],
                 'recurse'           => true,
                 'replace'           => false,
                 'ignore-duplicates' => false,
@@ -156,8 +164,6 @@ class PluginState
             $config[ 'include' ] : [ $config[ 'include' ] ];
         $this->requires       = (is_array($config[ 'require' ])) ?
             $config[ 'require' ] : [ $config[ 'require' ] ];
-        $this->replaces       = (is_array($config[ 'replaces' ])) ?
-            $config[ 'replaces' ] : [ $config[ 'replaces' ] ];
         $this->recurse        = (bool)$config[ 'recurse' ];
         $this->replace        = (bool)$config[ 'replace' ];
         $this->ignore         = (bool)$config[ 'ignore-duplicates' ];
@@ -185,16 +191,6 @@ class PluginState
     public function getRequires()
     {
         return $this->requires;
-    }
-
-    public function getReplaces()
-    {
-        return $this->replaces;
-    }
-
-    public function hasReplaces()
-    {
-        return ! empty($this->replaces);
     }
 
     /**
@@ -315,33 +311,6 @@ class PluginState
     public function shouldOptimizeAutoloader()
     {
         return $this->optimizeAutoloader;
-    }
-
-    /**
-     * Add duplicate packages
-     *
-     * @param string $type Package type
-     * @param array  $packages
-     */
-    public function addDuplicateLinks($type, array $packages)
-    {
-        if ( ! isset($this->duplicateLinks[ $type ])) {
-            $this->duplicateLinks[ $type ] = [];
-        }
-        $this->duplicateLinks[ $type ] =
-            array_merge($this->duplicateLinks[ $type ], $packages);
-    }
-
-    /**
-     * Get duplicate packages
-     *
-     * @param string $type Package type
-     * @return array
-     */
-    public function getDuplicateLinks($type)
-    {
-        return isset($this->duplicateLinks[ $type ]) ?
-            $this->duplicateLinks[ $type ] : [];
     }
 
     /**
