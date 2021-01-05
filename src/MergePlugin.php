@@ -26,7 +26,7 @@ use Wikimedia\Composer\Merge\ExtraPackage;
 use Composer\Package\RootPackageInterface;
 use Composer\EventDispatcher\Event as BaseEvent;
 use Wikimedia\Composer\Merge\MissingFileException;
-use Composer\Semver\Constraint\MatchAllConstraint;
+
 use Composer\EventDispatcher\EventSubscriberInterface;
 use Composer\DependencyResolver\Operation\InstallOperation;
 
@@ -263,7 +263,11 @@ class MergePlugin implements PluginInterface, EventSubscriberInterface
     {
         $root         = $this->composer->getPackage();
         $rootReplaces = $root->getReplaces();
-        $constraint   = new MatchAllConstraint();
+        if(class_exists(\Composer\Semver\Constraint\MatchAllConstraint::class)){
+            $constraint = new MatchAllConstraint();
+        } else {
+            $constraint = new \Composer\Semver\Constraint\Constraint('=','*');
+        }
         $constraint->setPrettyString($prettyConstraint);
         $rootReplaces[] = new Link($root->getName(), $name, $constraint, 'replaces', $prettyConstraint);
         $root->setReplaces($rootReplaces);
