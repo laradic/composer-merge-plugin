@@ -9,18 +9,19 @@
 namespace Wikimedia\Composer\Merge;
 
 use Composer\Composer;
+use Composer\Plugin\PluginInterface;
 
-/**
- * Mutable plugin state
- *
- * @author Bryan Davis <bd808@bd808.com>
- */
 class PluginState
 {
     /**
      * @var Composer $composer
      */
     protected $composer;
+
+    /**
+     * @var bool $isComposer1
+     */
+    protected $isComposer1;
 
     /**
      * @var array $includes
@@ -31,11 +32,6 @@ class PluginState
      * @var array $requires
      */
     protected $requires = [];
-
-    /**
-     * @var array $duplicateLinks
-     */
-    protected $duplicateLinks = [];
 
     /**
      * @var bool $devMode
@@ -119,16 +115,28 @@ class PluginState
      */
     protected $optimizeAutoloader = false;
 
-    /** @var array */
-    protected $replaces = [];
-
     /**
      * @param Composer $composer
      */
     public function __construct(Composer $composer)
     {
-        $this->composer = $composer;
+        $this->composer    = $composer;
+        $this->isComposer1 = version_compare(PluginInterface::PLUGIN_API_VERSION, '2.0.0', '<');
     }
+
+    /**
+     * Test if this plugin runs within Composer 1.
+     *
+     * @return bool
+     */
+    public function isComposer1()
+    {
+        return $this->isComposer1;
+    }
+
+
+    /** @var array */
+    protected $replaces = [];
 
     /**
      * Load plugin settings
@@ -167,6 +175,16 @@ class PluginState
         $this->mergeScripts   = (bool)$config[ 'merge-scripts' ];
     }
 
+    public function getReplaces()
+    {
+        return $this->replaces;
+    }
+
+    public function hasReplaces()
+    {
+        return ! empty($this->replaces);
+    }
+
     /**
      * Get list of filenames and/or glob patterns to include
      *
@@ -185,16 +203,6 @@ class PluginState
     public function getRequires()
     {
         return $this->requires;
-    }
-
-    public function getReplaces()
-    {
-        return $this->replaces;
-    }
-
-    public function hasReplaces()
-    {
-        return ! empty($this->replaces);
     }
 
     /**
@@ -315,33 +323,6 @@ class PluginState
     public function shouldOptimizeAutoloader()
     {
         return $this->optimizeAutoloader;
-    }
-
-    /**
-     * Add duplicate packages
-     *
-     * @param string $type Package type
-     * @param array  $packages
-     */
-    public function addDuplicateLinks($type, array $packages)
-    {
-        if ( ! isset($this->duplicateLinks[ $type ])) {
-            $this->duplicateLinks[ $type ] = [];
-        }
-        $this->duplicateLinks[ $type ] =
-            array_merge($this->duplicateLinks[ $type ], $packages);
-    }
-
-    /**
-     * Get duplicate packages
-     *
-     * @param string $type Package type
-     * @return array
-     */
-    public function getDuplicateLinks($type)
-    {
-        return isset($this->duplicateLinks[ $type ]) ?
-            $this->duplicateLinks[ $type ] : [];
     }
 
     /**

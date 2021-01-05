@@ -11,22 +11,19 @@ namespace Wikimedia\Composer;
 use Composer\Factory;
 use Composer\Composer;
 use Composer\Installer;
-use Composer\Package\Link;
 use Composer\IO\IOInterface;
-use Composer\Script\ScriptEvents;
 use Composer\Plugin\PluginEvents;
+use Composer\Script\ScriptEvents;
 use Composer\Installer\PackageEvent;
 use Composer\Plugin\PluginInterface;
 use Composer\Installer\PackageEvents;
 use Composer\Installer\InstallerEvent;
-use Composer\Installer\InstallerEvents;
 use Composer\Script\Event as ScriptEvent;
 use Wikimedia\Composer\Merge\PluginState;
 use Wikimedia\Composer\Merge\ExtraPackage;
 use Composer\Package\RootPackageInterface;
 use Composer\EventDispatcher\Event as BaseEvent;
 use Wikimedia\Composer\Merge\MissingFileException;
-
 use Composer\EventDispatcher\EventSubscriberInterface;
 use Composer\DependencyResolver\Operation\InstallOperation;
 
@@ -78,17 +75,12 @@ class MergePlugin implements PluginInterface, EventSubscriberInterface
     /**
      * Offical package name
      */
-    const PACKAGE_NAME = 'wikimedia/composer-merge-plugin';
-
-    /**
-     * Name of the composer 1.1 init event.
-     */
-    const COMPAT_PLUGINEVENTS_INIT = 'init';
+    public const PACKAGE_NAME = 'wikimedia/composer-merge-plugin';
 
     /**
      * Priority that plugin uses to register callbacks.
      */
-    const CALLBACK_PRIORITY = 50000;
+    private const CALLBACK_PRIORITY = 50000;
 
     /**
      * @var Composer $composer
@@ -148,18 +140,9 @@ class MergePlugin implements PluginInterface, EventSubscriberInterface
      */
     public static function getSubscribedEvents()
     {
-        if (defined('Composer\Installer\InstallerEvents::PRE_OPERATIONS_EXEC')) {
-            // composer-plugin-api ^2.0
-            $installerStartEvent = InstallerEvents::PRE_OPERATIONS_EXEC;
-        } else {
-            // composer-plugin-api ^1.0
-            $installerStartEvent = InstallerEvents::PRE_DEPENDENCIES_SOLVING;
-        }
         return [
             PluginEvents::INIT                  =>
                 [ 'onInit', self::CALLBACK_PRIORITY ],
-            $installerStartEvent                =>
-                [ 'onDependencySolve', self::CALLBACK_PRIORITY ],
             PackageEvents::POST_PACKAGE_INSTALL =>
                 [ 'onPostPackageInstall', self::CALLBACK_PRIORITY ],
             ScriptEvents::POST_INSTALL_CMD      =>
@@ -263,10 +246,10 @@ class MergePlugin implements PluginInterface, EventSubscriberInterface
     {
         $root         = $this->composer->getPackage();
         $rootReplaces = $root->getReplaces();
-        if(class_exists(\Composer\Semver\Constraint\MatchAllConstraint::class)){
-            $constraint = new MatchAllConstraint();
+        if (class_exists(\Composer\Semver\Constraint\MatchAllConstraint::class)) {
+            $constraint = new \Composer\Semver\Constraint\MatchAllConstraint();
         } else {
-            $constraint = new \Composer\Semver\Constraint\Constraint('=','*');
+            $constraint = new \Composer\Semver\Constraint\Constraint('=', '*');
         }
         $constraint->setPrettyString($prettyConstraint);
         $rootReplaces[] = new Link($root->getName(), $name, $constraint, 'replaces', $prettyConstraint);
@@ -365,9 +348,13 @@ class MergePlugin implements PluginInterface, EventSubscriberInterface
             if ($package === self::PACKAGE_NAME) {
                 $this->logger->info('composer-merge-plugin installed');
                 $this->state->setFirstInstall(true);
-                $this->state->setLocked(
-                    $event->getComposer()->getLocker()->isLocked()
-                );
+                if ($this->state->isComposer1()) {
+                    $this->state->setLocked(
+                        $event->getComposer()->getLocker()->isLocked()
+                    );
+                } else {
+                    $this->state->setLocked(false);
+                }
             }
         }
     }
@@ -384,14 +371,15 @@ class MergePlugin implements PluginInterface, EventSubscriberInterface
         // @codeCoverageIgnoreStart
         if ($this->state->isFirstInstall()) {
             $this->state->setFirstInstall(false);
-            $this->logger->info(
-                '<comment>' .
-                'Running additional update to apply merge settings' .
-                '</comment>'
-            );
+            $this->logger->log("\n" . '<info>Running composer update to apply merge settings</info>');
 
-            $config = $this->composer->getConfig();
+            if ( ! $this->state->isComposer1()) {
+                $file       = Factory::getComposerFile();
+                $lock       = Factory::getLockFile($file);
+                $lockBackup = file_exists($lock) ? file_get_contents($lock) : null;
+            }
 
+            $config       = $this->composer->getConfig();
             $preferSource = $config->get('preferred-install') == 'source';
             $preferDist   = $config->get('preferred-install') == 'dist';
 
@@ -417,7 +405,17 @@ class MergePlugin implements PluginInterface, EventSubscriberInterface
                 $installer->setUpdate(true);
             }
 
-            $installer->run();
+            $status = $installer->run();
+            if ($status !== 0) {
+                if ( ! $this->state->isComposer1() && $lockBackup) {
+                    $this->logger->log(
+                        "\n" . '<error>' .
+                        'Update to apply merge settings failed, reverting ' . $lock . ' to its original content.' .
+                        '</error>'
+                    );
+                    file_put_contents($lock, $lockBackup);
+                }
+            }
         }
         // @codeCoverageIgnoreEnd
     }
