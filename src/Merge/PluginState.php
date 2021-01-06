@@ -11,11 +11,6 @@ namespace Wikimedia\Composer\Merge;
 use Composer\Composer;
 use Composer\Plugin\PluginInterface;
 
-/**
- * Mutable plugin state
- *
- * @author Bryan Davis <bd808@bd808.com>
- */
 class PluginState
 {
     /**
@@ -139,6 +134,10 @@ class PluginState
         return $this->isComposer1;
     }
 
+
+    /** @var array */
+    protected $replaces = [];
+
     /**
      * Load plugin settings
      */
@@ -171,6 +170,16 @@ class PluginState
         $this->mergeExtra     = (bool)$config[ 'merge-extra' ];
         $this->mergeExtraDeep = (bool)$config[ 'merge-extra-deep' ];
         $this->mergeScripts   = (bool)$config[ 'merge-scripts' ];
+    }
+
+    public function getReplaces()
+    {
+        return $this->replaces;
+    }
+
+    public function hasReplaces()
+    {
+        return ! empty($this->replaces);
     }
 
     /**
